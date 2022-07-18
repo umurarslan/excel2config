@@ -1,0 +1,27 @@
+[project]
+name = "excel2config"
+version = "2022.07.07"
+description = "Render excel file to config files with Jinja2"
+readme = "README.md"
+license = { file="LICENSE" }
+authors = [
+  {name="Umur Arslan"},
+]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+requires-python = ">=3.9"
+dependencies = [
+    "Jinja2 >= 3.0",
+	"openpyxl >= 3.0",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/umurarslan/excel2config"
+
+[project.scripts]
+excel2config = "excel2config.excel2config:main"
