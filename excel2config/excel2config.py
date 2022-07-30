@@ -1,5 +1,5 @@
 '''
-Render excel file to text file with Jinja
+Generating network configuration with Excel sheets which include Jinja2 templates and data tables
 
 Version: 2022.07.07
 '''
