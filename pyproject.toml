@@ -1,7 +1,7 @@
 [project]
 name = "excel2config"
 version = "2022.07.07"
-description = "Render excel file to config files with Jinja2"
+description = "Generating network configuration with Excel sheets which include Jinja2 templates and data tables"
 readme = "README.md"
 license = { file="LICENSE" }
 authors = [
