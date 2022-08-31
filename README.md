@@ -83,6 +83,8 @@ PS C:\Users\alg\desktop>
 
 > Only **.xlsx** Excel file format supported.
 
+> For new features (e.g. Custom Jinja Function) check latest example Excel in project **/examples** folder.
+
 In Excel File first sheet is **GLOBAL_VARS**, this sheet optional and only for global template variables such as host-based (**e.g. leaf1**), all-host (**ALL**) and generator (**GEN**).
 
 ***GLOBAL_VARS Excel Sheet:***
