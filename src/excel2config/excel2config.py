@@ -1,18 +1,21 @@
 '''
-Generating network configuration with Excel sheets which include Jinja2 templates and data tables
+Render excel file to text file with Jinja
 
-Version: 2022.07.07
+Version: 2022.08.31
 '''
 
-from itertools import product
-from openpyxl import load_workbook
-from jinja2 import Template, Environment, meta
-from collections import defaultdict
-import re
-import os
-import time
 import argparse
-from logging import info, warning, error, basicConfig, FileHandler, StreamHandler
+import ast
+import os
+import re
+import time
+from collections import defaultdict
+from itertools import product
+from logging import (FileHandler, StreamHandler, basicConfig, error, info,
+                     warning)
+
+from jinja2 import Environment, Template, meta
+from openpyxl import load_workbook
 
 # LOG OPTIONS
 basicConfig(
@@ -60,7 +63,9 @@ class ExceltoConfig:
             '1/4;2/3-6;3/3/3-5;4;5-6'           ==> ['1/4', '2/3', '2/4', '2/5', '2/6', '3/3/3', '3/3/4', '3/3/5', '4', '5', '6']
             'ip1-2vrf-1001-1005;mac-vrf-6-6'    ==> ['ip1-2vrf-1001', 'ip1-2vrf-1002', 'ip1-2vrf-1003', 'ip1-2vrf-1004', 'ip1-2vrf-1005', 'mac-vrf-6']
         """
-
+        # if no_range [NO_RANGE]
+        if range_text.startswith('[NO_RANGE]'):
+            return [range_text]
         # for jinjalist [int1-2;int3]
         if range_text.startswith('[') and range_text.endswith(']'):
             return [range_text]
@@ -134,8 +139,41 @@ class ExceltoConfig:
                     if all(v == '' for v in line):
                         break
                     if line[0] == 'GEN':
-                        gen_dict[line[1]] = iter(self._range_text_to_list(line[2]))
+                        gen_dict[line[1]] = iter(
+                            self._range_text_to_list(line[2]))
                 return gen_dict
+
+    # security problem for "exec" ! restrict import library !
+    def _get_func_and_exec(self, input_excel_path):
+        ''' Get and Exec Jinja Function '''
+        wb = load_workbook(filename=input_excel_path, data_only=True)
+        func_dict = dict()
+        for sheet in wb:
+            if sheet.title == 'GLOBAL_VARS':
+                data = self._get_excel_row(sheet, row_start=3, col_start=2)
+                for line in data:
+                    if all(v == '' for v in line):
+                        break
+                    if line[0] == 'FUN':
+                        line_func_name = line[1]
+                        line_func_content = line[2]
+                        # # global exec part
+                        func_name = line_func_content.split(
+                            'def ')[1].split('(')[0]
+                        # function name check
+                        if func_name != line_func_name:
+                            warning(
+                                f'FUNCTION NAME <{line_func_name}> DIFFERENT FROM FUNCTION VALUE <{func_name}>')
+                        # adding global to def
+                        global_text = f"global {func_name}\n"
+                        # exec with new function text
+                        def_text_exec = global_text + line_func_content
+                        def_text_exec_parse = ast.parse(def_text_exec)
+                        exec(compile(def_text_exec_parse, "", mode="exec"))
+                        # #
+                        # add func name to func_dict for jinja render
+                        func_dict[line_func_name] = globals()[func_name]
+        return func_dict
 
     def _excel_file_check(self, input_excel_path):
         ''' Input excel file check: size and sheet-variable names (include only "[A-Za-z0-9_]") '''
@@ -151,29 +189,36 @@ class ExceltoConfig:
 
                 # CHECK EXCEL SHEET SIZE
                 if sheet.max_row > 1000:
-                    error(f'MAX 1000 ROW! CHECK EXCEL SHEET REMOVE EMPTY ROW @ {sheet.title}')
+                    error(
+                        f'MAX 1000 ROW! CHECK EXCEL SHEET REMOVE EMPTY ROW @ {sheet.title}')
                     raise SystemExit
                 if sheet.max_column > 1000:
-                    error(f'MAX 1000 COLUMN! CHECK EXCEL SHEET REMOVE EMPTY COLUMN @ {sheet.title}')
+                    error(
+                        f'MAX 1000 COLUMN! CHECK EXCEL SHEET REMOVE EMPTY COLUMN @ {sheet.title}')
                     raise SystemExit
                 # GLOBAL_VARS sheet check only size
                 if sheet.title == 'GLOBAL_VARS':
                     continue
 
                 if not bool(re.match("^[A-Za-z0-9_]*$", sheet.title)) and not sheet.title[0].isdigit():
-                    error(f'SHEET NAME! ONLY [A-Za-z0-9_] and NOT START WITH NUMERIC @ {sheet.title}')
+                    error(
+                        f'SHEET NAME! ONLY [A-Za-z0-9_] and NOT START WITH NUMERIC @ {sheet.title}')
                     er = True
                 jinja_check = sheet['A2'].value
                 for i in re.findall("{{(.+?)}}", jinja_check):
-                    i = i.replace('item.', '')
-                    if not bool(re.match("^[A-Za-z0-9_]*$", i)) and not i[0].isdigit():
+                    # for function
+                    if re.match("^[A-Za-z_]+[A-Za-z0-9_]*\([A-Za-z_]+[A-Za-z0-9_,]*\)", i):
+                        pass
+                    elif not bool(re.match("^[A-Za-z0-9_]*$", i)) and not i[0].isdigit():
                         error(
                             f'VARIABLE NAME! ONLY [A-Za-z0-9_] and NOT START WITH NUMERIC @ {sheet.title} VARIABLE: {i}')
                         er = True
-                header = self._get_excel_row(sheet, row_start=2, col_start=2)[0]
+                header = self._get_excel_row(
+                    sheet, row_start=2, col_start=2)[0]
                 for i in header:
                     if not bool(re.match("^[A-Za-z0-9_]*$", i)) and not i[0].isdigit():
-                        error(f'HEADER NAME! ONLY [A-Za-z0-9_] and NOT START WITH NUMERIC @ {sheet.title} HEADER: {i}')
+                        error(
+                            f'HEADER NAME! ONLY [A-Za-z0-9_] and NOT START WITH NUMERIC @ {sheet.title} HEADER: {i}')
                         er = True
             if er:
                 raise SystemExit
@@ -199,10 +244,12 @@ class ExceltoConfig:
             raise SystemExit
         # run
         wb = load_workbook(filename=input_excel_path, data_only=True)
-        hosts = []
+
         # global variable from sheet
         global_vars = self._get_global_vars(input_excel_path)
         gen_vars = self._get_generate_vars(input_excel_path)
+        # Jinja function exec and return dict, jinja render for every line
+        fun_global_vars = self._get_func_and_exec(input_excel_path)
 
         for sheet in wb:
             if sheet.title.startswith('_') or sheet.title == 'GLOBAL_VARS':
@@ -215,7 +262,8 @@ class ExceltoConfig:
 
             if jinja_temp and data_check:
                 info(f'[{input_excel_path}] / [{sheet}] START!')
-                header_w_space = self._get_excel_row(sheet, row_start=2, col_start=2)[0]
+                header_w_space = self._get_excel_row(
+                    sheet, row_start=2, col_start=2)[0]
                 data = self._get_excel_row(sheet, row_start=3, col_start=2)
                 header = [i for i in header_w_space if i != '']
 
@@ -223,7 +271,8 @@ class ExceltoConfig:
                     # if empty line then break
                     if all(v == '' for v in line):
                         break
-                    line_range = [self._range_text_to_list(i) for i in line if i != '']
+                    line_range = [self._range_text_to_list(
+                        i) for i in line if i != '']
 
                     line_range_product = [i for i in product(*line_range)]
 
@@ -231,10 +280,16 @@ class ExceltoConfig:
                         line_render = dict(zip(header, line_product))
 
                         for key_header in line_render.keys():
-                            if line_render[key_header].startswith('[') and line_render[key_header].endswith(']'):
+                            # if startswith [NO_RANGE], remove [NO_RANGE] and continue without jinja_list
+                            if line_render[key_header].startswith('[NO_RANGE]'):
+                                line_render[key_header] = line_render[key_header].removeprefix(
+                                    '[NO_RANGE]')
+                            elif line_render[key_header].startswith('[') and line_render[key_header].endswith(']'):
                                 # strip and remove bracket first/last
-                                removed_bracket = line_render[key_header].strip()[1:-1]
-                                line_render[key_header] = self._range_text_to_list(removed_bracket)
+                                removed_bracket = line_render[key_header].strip()[
+                                    1:-1]
+                                line_render[key_header] = self._range_text_to_list(
+                                    removed_bracket)
 
                         host_name = line_render['host']
 
@@ -250,22 +305,27 @@ class ExceltoConfig:
                             host_global_vars = dict()
 
                         # get jinja template variables
-                        jinja_temp_variables = meta.find_undeclared_variables(Environment().parse(jinja_temp))
+                        jinja_temp_variables = meta.find_undeclared_variables(
+                            Environment().parse(jinja_temp))
 
                         # check jinja_temp has gen_var and add to line_gen_var
                         line_gen_var = {}
                         for gen_var in gen_vars.keys():
                             if gen_var in jinja_temp_variables:
                                 try:
-                                    line_gen_var[gen_var] = next(gen_vars[gen_var])
+                                    line_gen_var[gen_var] = next(
+                                        gen_vars[gen_var])
                                 except Exception as e:
-                                    error(f'CHECK <{gen_var}> GLOBAL GEN VARIABLE RANGE!')
-                                    input('!!! NOT DONE! CHECK ERRORS! Press any key to exit...')
+                                    error(
+                                        f'CHECK <{gen_var}> GLOBAL GEN VARIABLE RANGE!')
+                                    input(
+                                        '!!! NOT DONE! CHECK ERRORS! Press any key to exit...')
                                     raise SystemExit
 
                         # merge global, host_global and line (priority ordered, last dict replace if same key exist before)
                         # merge line_gen_var
-                        host_and_global = (all_global_vars | host_global_vars | line_render | line_gen_var)
+                        host_and_global = (
+                            all_global_vars | host_global_vars | line_render | line_gen_var | fun_global_vars)
 
                         # get jinja template variables and compare with key/value data
                         host_and_global_keys = set(host_and_global.keys())
@@ -275,7 +335,9 @@ class ExceltoConfig:
                                 f'UNDEFINED VARIABLES FOUND IN JINJA TEMPLATE [{input_excel_path}] / [{sheet}] : <{only_jinja_temp_vars}>')
                             log_duplicate = sheet.title
 
-                        line_result = Template(jinja_temp).render(host_and_global)
+                        # render with host_and_global and fun_global_vars
+                        line_result = Template(
+                            jinja_temp).render(host_and_global)
                         line_result += '\n\n'
 
                         with open(f'{output_folder_name}/{host_name}.txt', 'a') as file:
@@ -285,13 +347,15 @@ class ExceltoConfig:
 
 
 def main():
+    ''' main function for cli run'''
     parser = argparse.ArgumentParser()
     parser.add_argument(
         'excelfile', help='excel file path [e.g. srlinux_config_1.xlsx] (OPTIONAL, default: config.xlsx)', nargs='?')
     args = parser.parse_args()
     if args.excelfile:
         EXCEL_FILE_PATH = args.excelfile
-        excel_file_name = EXCEL_FILE_PATH.split('\\')[-1].split('/')[-1].split('.')[0]
+        excel_file_name = EXCEL_FILE_PATH.split(
+            '\\')[-1].split('/')[-1].split('.')[0]
         OUTPUT_FOLDER_NAME_PREFIX = 'OUTPUTS_' + excel_file_name
     else:
         EXCEL_FILE_PATH = 'config.xlsx'
