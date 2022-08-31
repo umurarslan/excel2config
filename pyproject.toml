@@ -1,6 +1,6 @@
 [project]
 name = "excel2config"
-version = "2022.07.07"
+version = "2022.08.31"
 description = "Generating network configuration with Excel sheets which include Jinja2 templates and data tables"
 readme = "README.md"
 license = { file="LICENSE" }
