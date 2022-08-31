@@ -1,8 +1,0 @@
-interface ethernet 1/1/10
-  description red_interface
-  no shutdown
-  mtu 1500
-  vrf member red
-  no ip redirects
-  ip address 10.1.1.103/24
-
