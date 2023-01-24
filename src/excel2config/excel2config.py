@@ -1,7 +1,7 @@
 '''
 Render excel file to text file with Jinja
 
-Version: 2022.08.31
+Version: 2023.01.25
 '''
 
 import argparse
@@ -33,7 +33,9 @@ class ExceltoConfig:
     ''' Render excel file to text file with Jinja '''
 
     def _get_excel_row(self, excel_sheet, row_start=None, row_end=None, col_start=None, col_end=None):
-        '''Strip cell and remove none values.. excel_sheet is worksheet in openpyxl workbook --> for excel_sheet in load_workbook(filename = 'jinja_excel.xlsx')'''
+        '''Strip cell and remove none values. 
+        excel_sheet is worksheet in openpyxl workbook --> for excel_sheet in load_workbook(filename = 'jinja_excel.xlsx')
+        '''
         table_strip = []
         for row in excel_sheet.iter_rows(
                 min_row=row_start, max_row=row_end, min_col=col_start, max_col=col_end, values_only=True):
@@ -66,6 +68,9 @@ class ExceltoConfig:
         # if no_range [NO_RANGE]
         if range_text.startswith('[NO_RANGE]'):
             return [range_text]
+        # if <list in list> python object
+        if range_text.startswith('[[') and range_text.endswith(']]'):
+            return [range_text]
         # for jinjalist [int1-2;int3]
         if range_text.startswith('[') and range_text.endswith(']'):
             return [range_text]
@@ -82,7 +87,7 @@ class ExceltoConfig:
             if i == '':
                 continue
             # check range exist at last part, e.g. "test1/2-3", but not "test1/3-4extra"
-            parts = re.findall('(.*\D)([0]*)(\d+)-([0]*)(\d+)$', i)
+            parts = re.findall('(.*\D|)([0]*)(\d+)-([0]*)(\d+)$', i)
             if parts == []:
                 result.append(i)
                 continue
@@ -127,6 +132,7 @@ class ExceltoConfig:
                         all_global[line_product[0]
                                    ][line_product[1]] = line_product[2]
                 return dict(all_global)
+        return {}
 
     def _get_generate_vars(self, input_excel_path):
         ''' ITER all GLOBAL GEN, call with NEXT '''
@@ -142,6 +148,7 @@ class ExceltoConfig:
                         gen_dict[line[1]] = iter(
                             self._range_text_to_list(line[2]))
                 return gen_dict
+        return {}
 
     # security problem for "exec" ! restrict import library !
     def _get_func_and_exec(self, input_excel_path):
@@ -207,7 +214,11 @@ class ExceltoConfig:
                 jinja_check = sheet['A2'].value
                 for i in re.findall("{{(.+?)}}", jinja_check):
                     # for function
-                    if re.match("^[A-Za-z_]+[A-Za-z0-9_]*\([A-Za-z_]+[A-Za-z0-9_,]*\)", i):
+                    # if re.match("^[A-Za-z_]+[A-Za-z0-9_]*\([A-Za-z_]+[A-Za-z0-9_\[\],]*\)", i):
+                    if re.match("^[A-Za-z_]+[A-Za-z0-9_]*\(.*\)", i):
+                        pass
+                    # for list in list python object
+                    elif re.match("^[A-Za-z_]+[A-Za-z0-9_]*\[[0-9]+\]", i):
                         pass
                     elif not bool(re.match("^[A-Za-z0-9_]*$", i)) and not i[0].isdigit():
                         error(
@@ -284,6 +295,10 @@ class ExceltoConfig:
                             if line_render[key_header].startswith('[NO_RANGE]'):
                                 line_render[key_header] = line_render[key_header].removeprefix(
                                     '[NO_RANGE]')
+                            # if list in list python object
+                            elif line_render[key_header].startswith('[[') and line_render[key_header].endswith(']]'):
+                                line_render[key_header] = ast.literal_eval(
+                                    line_render[key_header])
                             elif line_render[key_header].startswith('[') and line_render[key_header].endswith(']'):
                                 # strip and remove bracket first/last
                                 removed_bracket = line_render[key_header].strip()[
@@ -340,8 +355,9 @@ class ExceltoConfig:
                             jinja_temp).render(host_and_global)
                         line_result += '\n\n'
 
-                        with open(f'{output_folder_name}/{host_name}.txt', 'a') as file:
-                            file.write(line_result)
+                        if line_result.strip():
+                            with open(f'{output_folder_name}/{host_name}.txt', 'a') as file:
+                                file.write(line_result)
 
                 info(f'[{input_excel_path}] / [{sheet}] DONE!')
 
