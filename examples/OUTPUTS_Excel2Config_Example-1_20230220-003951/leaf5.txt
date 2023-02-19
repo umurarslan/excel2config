@@ -1,0 +1,13 @@
+configure terminal
+
+interface ethernet 1/1/10
+  description rEd_intErfacE
+  no shutdown
+  mtu 1500
+  vrf member red
+  no ip redirects
+  ip address 10.1.1.104/24
+  exit 
+
+exit
+

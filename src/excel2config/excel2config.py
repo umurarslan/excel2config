@@ -270,9 +270,25 @@ class ExceltoConfig:
             data_check = sheet['B3'].value
             # for removing duplicate logs
             log_duplicate = ''
+            # for add header-footer to host once only
+            header_footer_host_list = []
 
             if jinja_temp and data_check:
                 info(f'[{input_excel_path}] / [{sheet}] START!')
+
+                # for header-footer create unique host list
+                all_host_list_range = [self._range_text_to_list(i[0]) for i in self._get_excel_row(
+                    sheet, row_start=3, col_start=2, col_end=2) if i[0] != '']
+                all_host_list = set(
+                    [j for i in all_host_list_range for j in i])
+
+                # if header append file
+                if header_jinja_rgx := re.search(r'{#HEADER\n(.*?)\n#}', jinja_temp, re.DOTALL):
+                    header_jinja = header_jinja_rgx.group(1)
+                    for i in all_host_list:
+                        with open(f'{output_folder_name}/{i}.txt', 'a') as file:
+                            file.write(header_jinja+'\n')
+
                 header_w_space = self._get_excel_row(
                     sheet, row_start=2, col_start=2)[0]
                 data = self._get_excel_row(sheet, row_start=3, col_start=2)
@@ -353,11 +369,18 @@ class ExceltoConfig:
                         # render with host_and_global and fun_global_vars
                         line_result = Template(
                             jinja_temp).render(host_and_global)
-                        line_result += '\n\n'
+                        line_result += '\n'
 
                         if line_result.strip():
                             with open(f'{output_folder_name}/{host_name}.txt', 'a') as file:
                                 file.write(line_result)
+
+                # if footer append file
+                if footer_jinja_rgx := re.search(r'{#FOOTER\n(.*?)\n#}', jinja_temp, re.DOTALL):
+                    footer_jinja = footer_jinja_rgx.group(1)
+                    for i in all_host_list:
+                        with open(f'{output_folder_name}/{i}.txt', 'a') as file:
+                            file.write(footer_jinja+'\n\n')
 
                 info(f'[{input_excel_path}] / [{sheet}] DONE!')
 
