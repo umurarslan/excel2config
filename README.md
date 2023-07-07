@@ -14,20 +14,8 @@ Excel2Config simple CLI tool generates network configuration based on Excel shee
 
 ## Installation
 
-**Option 1:** 
-
-From Python Package Index (PyPI) Repo:
-
 ```
 pip install excel2config
-```
-
-**Option 2:** 
-
-Download project ZIP file and run below command:    
-
-```
-pip install excel2config-X.zip
 ```
 
 ### Installation Check
